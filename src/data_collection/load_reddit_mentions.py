@@ -8,7 +8,7 @@ import time
 from threading import Semaphore
 import orjson
 import logging
-
+import csv
 # Add the src directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -21,8 +21,7 @@ from utils.config import (
     REDDIT_LOG_INTERVAL,
     REDDIT_MENTIONS23_DIR,
     REDDIT_NUM_WORKERS,
-    REDDIT_SUBREDDITS23_DIR,
-    REDDIT_RATE_THRESHOLDS
+    REDDIT_SUBREDDITS23_DIR
 )
 
 logger = Logger.setup(__name__, level=logging.DEBUG)
@@ -33,7 +32,7 @@ end_timestamp = datetime.strptime(END_DATE, "%Y-%m-%d").timestamp()
 logger.debug(f"Start timestamp: {start_timestamp} ({START_DATE})")
 logger.debug(f"End timestamp: {end_timestamp} ({END_DATE})")
 
-max_futures = 8
+max_futures = 4
 semaphore = Semaphore(max_futures)
 
 def submit_task(lines, ticker, executor, futures):
@@ -55,24 +54,65 @@ def process_chunk(lines, ticker):
         list: Filtered results as dictionaries.
     """
     results = []
+    invalid_id_count = 0
+    invalid_score_count = 0
+    text = ""
     for line in lines:
         try:
             data = orjson.loads(line)
-            body = data.get("body", "")
             created_utc = float(data.get("created_utc", 0))
 
-            if start_timestamp <= created_utc <= end_timestamp and ticker.upper() in body.upper():
-                results.append({
-                    "created_date": datetime.fromtimestamp(created_utc),
-                    "author": data.get("author", "[deleted]"),
-                    "body": body,
-                    "score": int(data.get("score", 0)),
-                    "id": data.get("id"),
-                })
+
+            if start_timestamp <= created_utc <= end_timestamp:
+                # Determine if the entry is a comment or a submission
+                if "body" in data:  # It's a comment
+                    text = data.get("body", "").strip()
+                else:  # It's a submission
+                    title = data.get("title", "").strip()
+                    selftext = data.get("selftext", "").strip()
+                    text = f"{title} {selftext}".strip()
+
+                if ticker.upper() in text.upper():
+                    author = data.get("author", "[deleted]")
+                    body = text
+                    score = data.get("score", None)
+                    id_ = data.get("id", None)
+
+                    # Validate critical fields
+                    if id_ is None:
+                        invalid_id_count += 1
+                        logger.warning(f"Missing 'id' in data: {data} | Line skipped.")
+                        continue  # Skip entries missing 'id'
+                    if score is None:
+                        invalid_score_count += 1
+                        logger.warning(f"Missing 'score' in data: {data} | Line skipped.")
+                        continue  # Skip entries missing 'score'
+
+                    # Ensure 'score' is an integer
+                    try:
+                        score = int(score)
+                    except (ValueError, TypeError):
+                        invalid_score_count += 1
+                        logger.warning(f"Invalid 'score' value: {score} | Line skipped.")
+                        continue 
+
+                    results.append({
+                        "created_date": datetime.fromtimestamp(created_utc),
+                        "author": data.get("author", "[deleted]"),
+                        "body": text,
+                        "score": int(data.get("score", 0)),
+                        "id": data.get("id"),
+                    })
         except orjson.JSONDecodeError as e:
             logger.warning(f"JSON decode error: {e} | Line skipped.")
         except Exception as e:
             logger.error(f"Unexpected error: {e} | Line skipped.")
+
+    if invalid_id_count > 0:
+       logger.debug(f"Processed chunk with {invalid_id_count} missing 'id' entries.")
+    if invalid_score_count > 0:
+        logger.debug(f"Processed chunk with {invalid_score_count} missing/invalid 'score' entries.")
+
     return results  # Return the collected results
 
 def process_file_parallel(subreddit_file, ticker, executor, futures):
@@ -115,7 +155,7 @@ def process_file_parallel(subreddit_file, ticker, executor, futures):
                 progress = (compressed_bytes_read / file_size) * 100
 
                 current_rate = bytes_in_interval / (1024 ** 2) / elapsed_interval  # MB/s
-                overall_rate = decompressed_bytes_read / (1024 ** 2) / (current_time - start_time)  # MB/s
+                overall_rate = compressed_bytes_read / (1024 ** 2) / (current_time - start_time)  # MB/s
                 logger.info(
                     f"Progress: {progress:.1f}% | "
                     f"Processed: {compressed_bytes_read / (1024 ** 2):.1f} MB of {file_size / (1024 ** 2):.1f} MB | "
@@ -150,7 +190,7 @@ def main():
         logger.warning(f"No .zst files found in directory: {REDDIT_SUBREDDITS23_DIR}")
         sys.exit(0)
 
-    ticker = ""
+    ticker = "TSLA"
     output_file = os.path.join(REDDIT_MENTIONS23_DIR, f"{ticker}_mentions.csv")
 
     all_results = []  # Initialize the aggregated results list
@@ -179,7 +219,7 @@ def main():
         os.makedirs(output_dir, exist_ok=True)
         df = pd.DataFrame(all_results)
         df = df.sort_values(by='created_date')  # Ensure chronological order
-        df.to_csv(output_file, index=False)
+        df.to_csv(output_file, index=False, quoting=csv.QUOTE_ALL, encoding='utf-8')
         logger.info(f"Processing complete. Results saved to {output_file}")
     else:
         logger.warning(f"No mentions of {ticker} found in files.")
@@ -188,8 +228,8 @@ def main():
     if all_results:
         logger.info("Preview of the stored data:")
         df = pd.read_csv(output_file)
-        print(df[['created_date', 'body', 'score']].head())
-        print(df[['created_date', 'body', 'score']].tail())
+        print(df[['created_date', 'body', 'score', 'id']].head())
+        print(df[['created_date', 'body', 'score', 'id']].tail())
 
 if __name__ == "__main__":
     main()

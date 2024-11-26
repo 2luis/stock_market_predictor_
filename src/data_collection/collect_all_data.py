@@ -9,6 +9,7 @@ from utils.config import START_DATE, END_DATE
 from utils.logger import Logger
 from utils.get_sp500_tickers import get_sp500_tickers, save_tickers_to_csv
 from load_yf_data import get_multiple_tickers as get_yahoo_data 
+from load_reddit_mentions import main as get_reddit_data
 
 # Import other data collection scripts
 # from data_collection.load_av_data import get_multiple_tickers as get_alphavantage_data
@@ -33,6 +34,16 @@ def collect_all_data(start_date = START_DATE, end_date = END_DATE):
             output_dir='data/raw/yahoo_finance'
         )
 
+        # 3. Collect Historical Reddit Data
+        #get_reddit_data(
+        #    tickers=tickers,
+        #    start_date=start_date,
+        #    end_date=end_date,
+        #    output_dir='data/interim/reddit_mentions'
+        #)
+
+
+
         # 3. Collect Alpha Vantage data
         # logger.info("Collecting Alpha Vantage data...")
         # get_alphavantage_data(
@@ -49,11 +60,12 @@ def collect_all_data(start_date = START_DATE, end_date = END_DATE):
         #     start_date=start_date,
         #     end_date=end_date,
         #     output_dir='data/raw/edgar'
-        # )
-
+    
+        return
     except Exception as e:
         logger.error(f"Error in data collection: {e}")
         raise
+    
 
 if __name__ == "__main__":
     collect_all_data()
