@@ -39,7 +39,7 @@ try:
         after_timestamp = last_submission.fullname if last_submission else None
 
         # Sleep to avoid hitting rate limits (optional)
-        time.sleep(1)  # Adjust time if needed
+        time.sleep(1)  # Adjust time if needed, the number is the number of seconds each pass through the loop will be delayed
 
     # Convert the list of posts to a DataFrame
     df = pd.DataFrame(posts)
