@@ -3,7 +3,6 @@ import datetime
 import pandas as pd
 import time
 
-# Initialize Reddit API client
 reddit = praw.Reddit(
     client_id='3YPrhq96dmHf6DLj9giyLw',
     client_secret='sBnuTX3SiKIIKXDmI61bPtsZ014zNg',
@@ -11,19 +10,19 @@ reddit = praw.Reddit(
 )
 
 try:
-    print("Successfully logged in as:", reddit.user.me())  # Prints your Reddit username
+    print("Successfully logged in as:", reddit.user.me())
 
     posts = []
-    after_timestamp = None  # For pagination
-    
+    after_timestamp = None  # Kepp track of time. API will automatically use the most recent posts if none is given as a paramater
+   
     # Fetch 400 posts in 4 requests (100 posts per request)
     for _ in range(4):
-        # Fetch the next batch of posts
+        # Fetch the next batch of posts. If there is a timestamp then use that as your starting date. If not just get recent posts
         if after_timestamp:
             submissions = reddit.subreddit('wallstreetbets').new(limit=100, params={'after': after_timestamp})
         else:
             submissions = reddit.subreddit('wallstreetbets').new(limit=100)
-        
+
         # Iterate through the submissions and add them to the posts list
         last_submission = None
         for submission in submissions:
@@ -35,10 +34,10 @@ try:
                 "comments": submission.num_comments
             })
             last_submission = submission  # Update the last_submission to track the most recent post
-        
-        # Update `after_timestamp` to get the next batch
+
+        # Update after_timestamp to get the next batch
         after_timestamp = last_submission.fullname if last_submission else None
-        
+
         # Sleep to avoid hitting rate limits (optional)
         time.sleep(1)  # Adjust time if needed
 
