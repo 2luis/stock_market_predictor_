@@ -1,7 +1,9 @@
 import praw
 import datetime
 import pandas as pd
-import time
+from IPython.display import display
+
+pd.set_option('display.max_rows', None)
 
 reddit = praw.Reddit(
     client_id='3YPrhq96dmHf6DLj9giyLw',
@@ -9,42 +11,56 @@ reddit = praw.Reddit(
     user_agent='MyRedditScraper v1.0 by /u/jack19655'
 )
 
-try:
-    print("Successfully logged in as:", reddit.user.me())
-
+print("Successfully logged in as:", reddit.user.me())  # Prints your Reddit username
+# get the posts
+# the after_timestamp can be used to go back further and do more reddit requests, but i dont see a point of going back more than a few days so i have just 
+# kept it as one reddit 'request'
+def fetch_posts(subreddit_name, limit, after_timestamp=None):
     posts = []
-    after_timestamp = None  # Kepp track of time. API will automatically use the most recent posts if none is given as a paramater
-   
-    # Fetch 400 posts in 4 requests (100 posts per request)
-    for _ in range(4):
-        # Fetch the next batch of posts. If there is a timestamp then use that as your starting date. If not just get recent posts
-        if after_timestamp:
-            submissions = reddit.subreddit('wallstreetbets').new(limit=100, params={'after': after_timestamp})
-        else:
-            submissions = reddit.subreddit('wallstreetbets').new(limit=100)
-
-        # Iterate through the submissions and add them to the posts list
-        last_submission = None
+    try:
+        submissions = reddit.subreddit(subreddit_name).new(
+            limit=limit,
+            params={'after': after_timestamp} if after_timestamp else None
+        )
+        
+        last_submission_fullname = None  # Initialize to track the last submission
+        
         for submission in submissions:
+            combined_body = f"{submission.title}\n{submission.selftext}"
             posts.append({
-                "title": submission.title,
-                "body": submission.selftext,
-                "created": datetime.datetime.fromtimestamp(submission.created_utc),
+                #"body": submission.title # use this if you only want the title and not subtitle
+                "body": combined_body,
+                "created_date": datetime.datetime.fromtimestamp(submission.created_utc),
                 "score": submission.score,
-                "comments": submission.num_comments
+                "comments": submission.num_comments,
+                "subreddit": subreddit_name,
+                "link": submission.url
             })
-            last_submission = submission  # Update the last_submission to track the most recent post
+            last_submission_fullname = submission.fullname  # Update the last submission's fullname
+        
+        return posts, last_submission_fullname
+    except Exception as e:
+        print(f"Error fetching posts from {subreddit_name}: {e}")
+        return [], None
 
-        # Update after_timestamp to get the next batch
-        after_timestamp = last_submission.fullname if last_submission else None
+# store posts 
+all_posts = []
 
-        # Sleep to avoid hitting rate limits (optional)
-        time.sleep(1)  # Adjust time if needed, the number is the number of seconds each pass through the loop will be delayed
+# fetch posts for those subreddits
+wallstreetbets_posts, _ = fetch_posts('wallstreetbets', 100)
+stocks_posts, _ = fetch_posts('stocks', 50)
+stockmarket_posts, _ = fetch_posts('StockMarket', 25)
 
-    # Convert the list of posts to a DataFrame
-    df = pd.DataFrame(posts)
-    print(df)  # Prints the DataFrame with the fetched posts
+all_posts = wallstreetbets_posts + stocks_posts + stockmarket_posts
 
-except Exception as e:
-    print(f"An error occurred: {e}")
+# convert to a DataFrame
+df = pd.DataFrame(all_posts)
+
+df['AAPL_count'] = df['body'].str.count(r'\bAAPL\b')
+df['apple_count'] = df['body'].str.count(r'(?i)\bapple\b')
+
+# filter the DataFrame to include posts only saying 'apple' or 'AAPL'
+filtered_df = df[(df['AAPL_count'] > 0) | (df['apple_count'] > 0)]
+
+display(filtered_df)
 
