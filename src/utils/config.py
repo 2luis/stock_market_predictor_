@@ -50,8 +50,8 @@ REDDIT_MAX_COMMENTS = None # Maximum number of comments to process, if None, pro
 SP500_TICKERS_FILE = f"{RAW_DATA_DIR}/sp500_tickers.csv"
 
 # Date range for data collection
-START_DATE = "2019-11-18"
-END_DATE = "2024-11-25"
+START_DATE = "2020-01-01"
+END_DATE = "2023-12-31"
 
 # Logging configuration
 LOG_FILE_NAME = f"{LOG_DIR}/data_collection.log"

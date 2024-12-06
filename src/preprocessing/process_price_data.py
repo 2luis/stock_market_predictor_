@@ -8,6 +8,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.logger import Logger
 
+feature_columns = ['MACD', 'Signal', 'RSI', 'ATR', 'OBV', 'Volume']
+
 logger = Logger.setup(__name__)
 
 def create_target_variable(df):
@@ -56,6 +58,26 @@ def calculate_technical_indicators(df):
 
     return df
 
+def add_lag_features(df, lag_steps=5):
+    """
+    Add lag features to the DataFrame.
+    
+    Parameters:
+    - df: pandas DataFrame containing the features.
+    - lag_steps: Number of lag steps to add for each feature.
+    
+    Returns:
+    - df: DataFrame with added lag features.
+    """
+    logger.info(f"Adding lag features with {lag_steps} lag steps...")
+    for lag in range(1, lag_steps + 1):
+        for feature in feature_columns:
+            lag_feature = f'{feature}_lag_{lag}'
+            df[lag_feature] = df[feature].shift(lag)
+            logger.debug(f"Added lag feature: {lag_feature}")
+    logger.info(f"Lag features added. Data shape: {df.shape}")
+    return df
+
 
 def normalize_features(df, feature_columns):
     """
@@ -101,25 +123,44 @@ def preprocess_ohlc_data(filepath, save_path):
 
         logger.info("Handling missing values...")
         df.fillna(method='ffill', inplace=True)
-        df.dropna(inplace=True) 
+        df.fillna(method='bfill', inplace=True)
 
         df.set_index('Date', inplace=True)
 
         # Calculate technical indicators
         df = calculate_technical_indicators(df)
 
-        # Normalize technical indicators and volume
-        feature_columns = ['MACD', 'Signal', 'RSI', 'ATR', 'OBV', 'Volume']
+        df.fillna(method='ffill', inplace=True)
+        df.fillna(method='bfill', inplace=True)
+
+        #global feature_columns  # Ensure feature_columns are accessible globally
+        #feature_columns = ['MACD', 'Signal', 'RSI', 'ATR', 'OBV', 'Volume']
+        df = add_lag_features(df, lag_steps=5)
+
+        # Drop rows with any NaN values resulting from lag features
+        logger.info("Dropping rows with NaNs after adding lag features...")
+        df.dropna(inplace=True)
+        logger.info(f"Data shape after dropping NaNs: {df.shape}")
 
         # Ensure all feature columns exist
-        missing_features = set(feature_columns) - set(df.columns)
-        if missing_features:
-            logger.error(f"Missing features for normalization: {missing_features}")
-            raise ValueError(f"Missing features: {missing_features}")
+       # missing_features = set(feature_columns) - set(df.columns)
+       # if missing_features:
+       #     logger.error(f"Missing features for normalization: {missing_features}")
+       #     raise ValueError(f"Missing features: {missing_features}")
 
-        df = normalize_features(df, feature_columns)
+        # Define all features to be normalized (primary + lagged)
+        lag_feature_cols = [f'{feature}_lag_{lag}' for feature in feature_columns for lag in range(1, 6)]
+        all_features = feature_columns + lag_feature_cols
+        
+        df = normalize_features(df, all_features)
 
         df = create_target_variable(df)
+
+        # Select only desired columns: Date, technical indicators, Target
+        columns_to_save = feature_columns + lag_feature_cols + ['Target']
+        df = df[columns_to_save]
+        logger.info(f"Selected columns to save: {columns_to_save}")
+        logger.debug(f"DataFrame before resetting index:\n{df.head()}")
 
         df.reset_index(inplace=True)
 
@@ -128,16 +169,41 @@ def preprocess_ohlc_data(filepath, save_path):
         df.to_csv(save_path, index=False)
         print(f"Processed data saved to {save_path}")
 
+        
+
     except Exception as e:
         logger.error(f"Preprocessing failed for {filepath}: {e}")
         raise e
 
+def process_multiple_tickers(tickers, raw_data_dir='data/raw/yahoo_finance', processed_data_dir='data/processed/sentiment_data'):
+     """
+     Process multiple tickers by preprocessing their OHLC data.
+     
+     Args:
+         tickers (list): List of ticker symbols to process.
+         raw_data_dir (str): Directory where raw Yahoo Finance data is stored.
+         processed_data_dir (str): Directory where processed technical indicators will be saved.
+     """
+     logger.info(f"Starting processing for multiple tickers: {tickers}")
+     for ticker in tickers:
+         logger.info(f"Processing data for {ticker}")
+         input_filepath = os.path.join(raw_data_dir, f"{ticker}_1d.csv")
+         output_filepath = os.path.join(processed_data_dir, f"{ticker}_technical_indicators.csv")
+         
+         preprocess_ohlc_data(input_filepath, output_filepath)
+         logger.info(f"Completed processing for {ticker}. Saved to {output_filepath}")
+     logger.info("Completed processing for all tickers.")
+
 if __name__ == "__main__":
 
-    ticker = "AAPL"
-    # Define filepaths
-    input_filepath = f"data/raw/yahoo_finance/{ticker}_1d.csv"  # Apple price data file
-    output_filepath = f"data/processed/{ticker}_technical_indicators.csv" 
+     # List of tech stock tickers
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META"]  # Add more tickers as needed
 
-    # Preprocess and save
-    preprocess_ohlc_data(input_filepath, output_filepath)
+    for ticker in tickers:
+        logger.info(f"Processing data for {ticker}")
+        input_filepath = f"data/raw/yahoo_finance/{ticker}_1d.csv"
+        output_filepath = f"data/processed/{ticker}_technical_indicators.csv"
+        
+        preprocess_ohlc_data(input_filepath, output_filepath)
+
+
