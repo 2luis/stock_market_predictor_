@@ -11,8 +11,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.model_selection import TimeSeriesSplit, GridSearchCV, cross_val_score, cross_validate
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve, precision_score, recall_score, f1_score, precision_recall_curve
 from sklearn.preprocessing import MinMaxScaler
 from imblearn.over_sampling import SMOTE
 from data_collection.vader import analyze_sentiment
@@ -90,6 +90,15 @@ def evaluate_model(model, X_test, y_test, model_name='Model'):
     
     auc = roc_auc_score(y_test, y_pred_proba)
     print(f"ROC AUC Score: {auc}\n")
+
+    # Additional Metrics
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall:    {recall:.4f}")
+    print(f"F1 Score:  {f1:.4f}\n")
     
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
@@ -108,6 +117,22 @@ def evaluate_model(model, X_test, y_test, model_name='Model'):
     plt.close()
     print(f"ROC Curve for {model_name} saved to plots/{model_name}_roc_curve.png\n")
 
+    # Precision-Recall Curve
+    precision_vals, recall_vals, _ = precision_recall_curve(y_test, y_pred_proba)
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall_vals, precision_vals, label=f'{model_name}')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title(f'Precision-Recall Curve - {model_name}')
+    plt.legend(loc='lower left')
+    plt.tight_layout()
+    
+    os.makedirs('plots/precision_recall_curves', exist_ok=True)
+    
+    pr_plot_path = f'plots/precision_recall_curves/{model_name}_precision_recall_curve.png'
+    plt.savefig(pr_plot_path)
+    plt.close()
+    print(f"Precision-Recall Curve for {model_name} saved to {pr_plot_path}\n")
     #plt.show()
 
 def load_data(filepaths):
@@ -131,6 +156,116 @@ def load_data(filepaths):
   
     return combined_data
 
+def perform_cross_validation(model, X, y):
+    """
+    Perform cross-validation and return evaluation metrics.
+    
+    Args:
+        model: Machine learning model to evaluate.
+        X (pd.DataFrame): Features.
+        y (pd.Series): Target variable.
+    
+    Returns:
+        dict: Cross-validation scores for different metrics.
+    """
+    tscv = TimeSeriesSplit(n_splits=5)
+    scoring = ['roc_auc', 'precision', 'recall', 'f1']
+    
+    cv_results = cross_validate(model, X, y, cv=tscv, scoring=scoring, n_jobs=-1, verbose=1)
+    
+    print("Cross-Validation Results:")
+    for metric in scoring:
+        scores = cv_results[f'test_{metric}']
+        print(f"{metric.capitalize()}: {scores.mean():.4f} ± {scores.std():.4f}")
+    
+    return cv_results
+
+
+def simulate_paper_trading(model, X_test, y_test, initial_capital=1000):
+    """
+    Simulate paper trading based on model predictions.
+    
+    Strategy:
+    - When the model predicts a positive signal (1), buy a $100 position.
+    - Hold the position for one day.
+    - Calculate daily returns based on actual price movement.
+    
+    Args:
+        model: Trained machine learning model.
+        X_test (pd.DataFrame): Test features.
+        y_test (pd.Series): Actual target values.
+        initial_capital (float): Starting capital for simulation.
+    """
+    print(f"\n--- Paper Trading Simulation for {model.__class__.__name__} ---")
+    
+    # Assuming 'Date' and 'Close' price are available in the data
+    # Modify as per your actual data columns
+    # Here, we'll assume that 'Close' price is available
+    # If not, you need to include it during data loading
+    if 'Close' not in X_test.columns:
+        print("Error: 'Close' price column not found in test features. Cannot perform paper trading simulation.")
+        return
+    
+    # Align X_test and y_test
+    X_test = X_test.copy()
+    X_test['Target'] = y_test
+    X_test.reset_index(drop=True, inplace=True)
+    
+    # Predict probabilities and classes
+    predictions = model.predict(X_test)
+    predicted_probs = model.predict_proba(X_test)[:, 1]
+    
+    # Initialize capital and positions
+    capital = initial_capital
+    position_size = 100  # $100 per trade
+    portfolio = []
+    trades = 0
+    
+    for i in range(len(X_test) - 1):
+        if predictions[i] == 1:
+            # Buy at closing price of day i
+            buy_price = X_test.loc[i, 'Close']
+            # Sell at closing price of day i+1
+            sell_price = X_test.loc[i + 1, 'Close']
+            profit = sell_price - buy_price
+            capital += profit
+            trades += 1
+            portfolio.append({
+                'Buy_Date': X_test.loc[i, 'Date'],
+                'Sell_Date': X_test.loc[i + 1, 'Date'],
+                'Buy_Price': buy_price,
+                'Sell_Price': sell_price,
+                'Profit': profit
+            })
+    
+    # Convert portfolio to DataFrame
+    portfolio_df = pd.DataFrame(portfolio)
+    
+    # Calculate total profit/loss
+    total_profit = portfolio_df['Profit'].sum()
+    print(f"Total Trades Executed: {trades}")
+    print(f"Total Profit/Loss: ${total_profit:.2f}")
+    print(f"Final Capital: ${capital:.2f}")
+    
+    # Plot portfolio performance
+    if not portfolio_df.empty:
+        portfolio_df['Cumulative Profit'] = portfolio_df['Profit'].cumsum()
+        plt.figure(figsize=(10, 6))
+        plt.plot(portfolio_df['Sell_Date'], portfolio_df['Cumulative Profit'], marker='o')
+        plt.title(f'Cumulative Profit - {model.__class__.__name__}')
+        plt.xlabel('Date')
+        plt.ylabel('Cumulative Profit ($)')
+        plt.tight_layout()
+        
+        os.makedirs('plots/paper_trading', exist_ok=True)
+        plot_path = f"plots/paper_trading/{model.__class__.__name__}_cumulative_profit.png"
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"Cumulative Profit plot saved to {plot_path}\n")
+    else:
+        print("No trades were executed based on the model's predictions.\n")
+
+   
 
 def main():
     ## List of processed data file paths for each ticker
@@ -151,10 +286,13 @@ def main():
     
     # Preprocess features
     X_train_res, y_train_res = preprocess_features(X_train, y_train)
-    
+
+    models = {}    
     # Train and Evaluate Random Forest
     try:
         best_rf = train_random_forest(X_train_res, y_train_res)
+        models['Random Forest'] = best_rf
+
         importances_rf = best_rf.feature_importances_
         feature_names_rf = X_train_res.columns
         feature_importances_rf = pd.Series(importances_rf, index=feature_names_rf).sort_values(ascending=False)
@@ -162,6 +300,8 @@ def main():
         print(feature_importances_rf.head(10))
             
         #print("Best Random Forest Parameters:", best_rf.get_params())
+
+        rf_cv_results = perform_cross_validation(best_rf, X_train_res, y_train_res)
         
         evaluate_model(best_rf, X_test, y_test, model_name='Random Forest')
     except Exception as e:
@@ -170,11 +310,14 @@ def main():
     # Train and Evaluate XGBoost
     try:
         best_xgb = train_xgboost(X_train_res, y_train_res)
+        models['XGBoost'] = best_xgb
         
         xgb.plot_importance(best_xgb)
         plt.savefig('plots/XGBoost_feature_importance.png')
         plt.close()
         print("Best XGBoost Parameters:", best_xgb.get_params())
+
+        xgb_cv_results = perform_cross_validation(best_xgb, X_train_res, y_train_res)
         evaluate_model(best_xgb, X_test, y_test, model_name='XGBoost')
     except Exception as e:
         print(f"Error training or evaluating XGBoost: {e}")
@@ -186,6 +329,13 @@ def main():
         print("Models saved successfully.")
     except Exception as e:
         print(f"Error saving models: {e}")
+
+      # Paper Trading Simulation
+    try:
+        simulate_paper_trading(best_rf, X_test, y_test, initial_capital=1000)
+        simulate_paper_trading(best_xgb, X_test, y_test, initial_capital=1000)
+    except Exception as e:
+        print(f"Error during paper trading simulation: {e}")
 
 if __name__ == "__main__":
     main()

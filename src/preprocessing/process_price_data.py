@@ -103,7 +103,7 @@ def preprocess_ohlc_data(filepath, save_path):
         df = pd.read_csv(
             filepath,
             skiprows=3,  # Skip the first two rows
-            names=['Date', 'Price', 'Adj Close', 'Close', 'High', 'Low', 'Volume'],
+            names=['Date','Adj Close', 'Close', 'High', 'Low', 'Open', 'Volume'],
             parse_dates=['Date']
         )   
 
@@ -197,7 +197,7 @@ def process_multiple_tickers(tickers, raw_data_dir='data/raw/yahoo_finance', pro
 if __name__ == "__main__":
 
      # List of tech stock tickers
-    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META"]  # Add more tickers as needed
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]  # Add more tickers as needed
 
     for ticker in tickers:
         logger.info(f"Processing data for {ticker}")
