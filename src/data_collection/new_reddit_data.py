@@ -15,7 +15,7 @@ reddit = praw.Reddit(
 
 print("Successfully logged in as:", reddit.user.me())
 
-# get posts
+# Fetch posts
 def fetch_posts(subreddit_name, limit, after_timestamp=None):
     posts = []
     try:
@@ -37,7 +37,7 @@ def fetch_posts(subreddit_name, limit, after_timestamp=None):
         print(f"Error fetching posts from {subreddit_name}: {e}")
         return []
 
-# get comments
+# Fetch comments
 def fetch_comments(subreddit_name, limit, filter_score=0):
     comments = []
     try:
@@ -84,3 +84,4 @@ combined_df['apple_count'] = combined_df['body'].str.count(rf'(?i)\b{name}\b')
 final_df = combined_df[(combined_df['AAPL_count'] > 0) | (combined_df['apple_count'] > 0)]
 display(final_df)
 
+final_df.to_csv('data.csv', index=True)
