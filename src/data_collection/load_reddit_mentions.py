@@ -204,7 +204,8 @@ def main():
         logger.warning(f"No .zst files found in directory: {REDDIT_SUBREDDITS23_DIR}")
         sys.exit(0)
 
-    ticker = "BRK.B"
+    # define ticker to search for
+    ticker = "MSFT"
     output_file = os.path.join(REDDIT_MENTIONS23_DIR, f"{ticker}_mentions.csv")
     all_results = []
 

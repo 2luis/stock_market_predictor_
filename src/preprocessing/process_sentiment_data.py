@@ -187,8 +187,18 @@ def process_ticker(ticker):
         daily_sentiment_aligned['average_sentiment'].fillna(method='ffill', inplace=True)
         daily_sentiment_aligned['mention_count'].fillna(0, inplace=True)
         daily_sentiment_aligned['total_score'].fillna(0, inplace=True)
-        daily_sentiment_aligned.fillna(0, inplace=True)
-        
+
+        # handle NaNs in moving average by forward filling
+        moving_average_col = 'sentiment_moving_average_3d'
+        if moving_average_col in daily_sentiment_aligned.columns:
+            daily_sentiment_aligned[moving_average_col].fillna(method='ffill', inplace=True)
+
+            daily_sentiment_aligned[moving_average_col].fillna(method='bfill', inplace=True)
+
+            if daily_sentiment_aligned[moving_average_col].isna().sum() > 0:
+                overall_mean = daily_sentiment_aligned[moving_average_col].mean()
+                daily_sentiment_aligned[moving_average_col].fillna(overall_mean, inplace=True)
+
         # save processed data
         output_file = os.path.join(OUTPUT_DIR, f"{ticker}_daily_sentiment.csv")
         os.makedirs(OUTPUT_DIR, exist_ok=True)

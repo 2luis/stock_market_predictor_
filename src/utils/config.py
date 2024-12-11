@@ -43,7 +43,7 @@ REDDIT_LOG_INTERVAL = 5  # Interval between logging (in seconds)
 SP500_TICKERS_FILE = f"{RAW_DATA_DIR}/sp500_tickers.csv"
 
 # Date range for data collection
-START_DATE = "2019-11-18"
+START_DATE = "2020-01-01"
 END_DATE = "2023-12-31"
 
 # Logging configuration

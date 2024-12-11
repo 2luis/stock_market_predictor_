@@ -85,6 +85,13 @@ def collect_all_data(start_date=START_DATE, end_date=END_DATE):
         end_date (str): end date for data collection in YYYY-MM-DD format
     """
     try:
+        """
+        # get sp500 tickers (for future use)
+        sp500_tickers = get_sp500_tickers()
+        save_tickers_to_csv(sp500_tickers)  
+        logger.info("sp500 tickers saved to csv")
+        """
+
         # define tech stock tickers for processing
         tech_tickers = ["MSFT", "AAPL", "GOOGL", "AMZN"]
         logger.info(f"selected tech tickers for processing: {tech_tickers}")
