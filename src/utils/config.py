@@ -36,21 +36,14 @@ REDDIT_MENTIONS24_DIR = f"{INTERIM_DATA_DIR}/reddit/subreddits24_mentions"
 # Historical reddit data parameters
 REDDIT_NUM_WORKERS = 8 # Number of workers for parallel processing
 REDDIT_CHUNK_SIZE = 1024 * 1024 # (1024 * 1024) or 1 MB chunks 
-REDDIT_LOG_INTERVAL = 5  # Interval between loggin (in seconds)
-#REDDIT_RATE_THRESHOLDS = {
-#    "slow": 13.0, 
-#    "fast": 30.0
-#}
-
-
-REDDIT_MAX_COMMENTS = None # Maximum number of comments to process, if None, process all comments
+REDDIT_LOG_INTERVAL = 5  # Interval between logging (in seconds)
 
 
 # S&P 500 tickers file
 SP500_TICKERS_FILE = f"{RAW_DATA_DIR}/sp500_tickers.csv"
 
 # Date range for data collection
-START_DATE = "2020-01-01"
+START_DATE = "2019-11-18"
 END_DATE = "2023-12-31"
 
 # Logging configuration

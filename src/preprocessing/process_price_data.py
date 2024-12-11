@@ -58,7 +58,7 @@ def calculate_technical_indicators(df):
 
     return df
 
-def add_lag_features(df, lag_steps=5):
+def add_lag_features(df, lag_steps=3):
     """
     Add lag features to the DataFrame.
     
@@ -95,9 +95,6 @@ def preprocess_ohlc_data(filepath, save_path):
     """
     logger.info("Starting ticker data preprocessing script.")
 
-    # Load raw OHLC data
-    df = pd.read_csv(filepath)
-
     try:
         logger.info(f"Loading raw data from {filepath}")
         df = pd.read_csv(
@@ -109,17 +106,6 @@ def preprocess_ohlc_data(filepath, save_path):
 
         logger.info(f"Data loaded successfully. Data shape: {df.shape}")
         logger.debug(f"DataFrame Head:\n{df.head()}")
-
-        # Parse 'Date' column to datetime if not already
-        #if 'Date' in df.columns:
-        #    df['Date'] = pd.to_datetime(df['Date'])
-        #    df.sort_values('Date', inplace=True)
-        #    df.reset_index(drop=True, inplace=True)
-        #    df.set_index('Date', inplace=True)  
-        ##else:
-        #    logger.error("No 'Date' column found in the data.")
-        #    raise KeyError("Missing 'Date' column.")
-
 
         logger.info("Handling missing values...")
         df.fillna(method='ffill', inplace=True)
@@ -133,20 +119,12 @@ def preprocess_ohlc_data(filepath, save_path):
         df.fillna(method='ffill', inplace=True)
         df.fillna(method='bfill', inplace=True)
 
-        #global feature_columns  # Ensure feature_columns are accessible globally
-        #feature_columns = ['MACD', 'Signal', 'RSI', 'ATR', 'OBV', 'Volume']
         df = add_lag_features(df, lag_steps=5)
 
         # Drop rows with any NaN values resulting from lag features
         logger.info("Dropping rows with NaNs after adding lag features...")
         df.dropna(inplace=True)
         logger.info(f"Data shape after dropping NaNs: {df.shape}")
-
-        # Ensure all feature columns exist
-       # missing_features = set(feature_columns) - set(df.columns)
-       # if missing_features:
-       #     logger.error(f"Missing features for normalization: {missing_features}")
-       #     raise ValueError(f"Missing features: {missing_features}")
 
         # Define all features to be normalized (primary + lagged)
         lag_feature_cols = [f'{feature}_lag_{lag}' for feature in feature_columns for lag in range(1, 6)]

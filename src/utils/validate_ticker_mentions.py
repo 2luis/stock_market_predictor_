@@ -1,3 +1,10 @@
+"""
+Validation script for Reddit ticker mention data files.
+This script performs comprehensive validation checks on CSV files containing Reddit ticker mentions,
+including data format, completeness, and consistency checks.
+"""
+
+
 import pandas as pd
 import os
 import sys

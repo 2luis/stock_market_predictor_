@@ -1,3 +1,9 @@
+"""
+Sentiment analysis processing script that analyzes and aggregates Reddit sentiment data.
+This script processes Reddit posts to calculate sentiment scores, aggregates them daily,
+and aligns the data with trading days for stock market analysis.
+"""
+
 import os
 import sys
 import pandas as pd
@@ -6,33 +12,32 @@ import nltk
 import argparse
 from datetime import datetime, timedelta
 
-# Add the src directory to the Python path
+# add the src directory to the python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.logger import Logger
 
-# Download VADER lexicon if not already downloaded
+# download vader lexicon if not already downloaded
 nltk.download('vader_lexicon')
 
-# Initialize the VADER sentiment analyzer
+# initialize the vader sentiment analyzer
 sia = SentimentIntensityAnalyzer()
 
-# Define the directory paths
+# define the directory paths
 INPUT_DIR = "data/interim/reddit/subreddits23_mentions"
 OUTPUT_DIR = "data/processed/sentiment_data"
 
-# Initialize logger
 logger = Logger.setup(__name__)
 
 def analyze_sentiment(df):
     """
-    Analyze sentiment of Reddit posts and add a 'sentiment' column.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing Reddit posts with a 'body' column.
-
-    Returns:
-        pd.DataFrame: DataFrame with an added 'sentiment' column.
+    analyze sentiment of reddit posts and add a 'sentiment' column.
+    
+    args:
+        df (pd.DataFrame): dataframe containing reddit posts with a 'body' column
+    
+    returns:
+        pd.DataFrame: dataframe with added 'sentiment' column
     """
     logger.info("Analyzing sentiment of Reddit posts...")
     df['sentiment'] = df['body'].apply(lambda text: sia.polarity_scores(str(text))['compound'])
@@ -41,13 +46,13 @@ def analyze_sentiment(df):
 
 def aggregate_daily_sentiment(df):
     """
-    Aggregate sentiment scores and mention counts daily.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing 'Date' and 'sentiment' columns.
-
-    Returns:
-        pd.DataFrame: Aggregated DataFrame with 'Date', 'average_sentiment', and 'mention_count'.
+    aggregate sentiment scores and mention counts daily.
+    
+    args:
+        df (pd.DataFrame): dataframe containing 'Date' and 'sentiment' columns
+    
+    returns:
+        pd.DataFrame: aggregated dataframe with 'Date', 'average_sentiment', and 'mention_count'
     """
     logger.info("Aggregating daily sentiment scores and mention counts...")
     daily_sentiment = df.groupby('Date').agg(
@@ -60,14 +65,14 @@ def aggregate_daily_sentiment(df):
 
 def normalize_sentiment(df, feature_columns):
     """
-    Normalize the sentiment scores using Min-Max Scaling.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing sentiment scores.
-        feature_columns (list): List of columns to normalize.
-
-    Returns:
-        pd.DataFrame: DataFrame with normalized sentiment scores.
+    normalize the sentiment scores using min-max scaling.
+    
+    args:
+        df (pd.DataFrame): dataframe containing sentiment scores
+        feature_columns (list): list of columns to normalize
+    
+    returns:
+        pd.DataFrame: dataframe with normalized sentiment scores
     """
     logger.info("Normalizing sentiment scores using Min-Max Scaling...")
     from sklearn.preprocessing import MinMaxScaler
@@ -78,22 +83,21 @@ def normalize_sentiment(df, feature_columns):
 
 def handle_weekends(daily_sentiment, trading_days):
     """
-    Align sentiment data with trading days by forward-filling sentiment scores for weekends.
-
-    Args:
-        daily_sentiment (pd.DataFrame): Aggregated daily sentiment DataFrame.
-        trading_days (pd.DatetimeIndex): Trading days from price data.
-
-    Returns:
-        pd.DataFrame: DataFrame aligned with trading days.
+    align sentiment data with trading days by forward-filling sentiment scores for weekends.
+    
+    args:
+        daily_sentiment (pd.DataFrame): aggregated daily sentiment dataframe
+        trading_days (pd.DatetimeIndex): trading days from price data
+    
+    returns:
+        pd.DataFrame: dataframe aligned with trading days
     """
     logger.info("Handling weekends by aligning sentiment data with trading days...")
     daily_sentiment['Date'] = pd.to_datetime(daily_sentiment['Date'])
-
     trading_days = pd.to_datetime(trading_days).tz_localize(None)
-
+    
     daily_sentiment.set_index('Date', inplace=True)
-    # Reindex to include all trading days
+    # reindex to include all trading days
     aligned_sentiment = daily_sentiment.reindex(trading_days, method='ffill').reset_index()
     aligned_sentiment.rename(columns={'index': 'Date'}, inplace=True)
     logger.debug("Weekend handling completed.")
@@ -101,14 +105,14 @@ def handle_weekends(daily_sentiment, trading_days):
 
 def add_moving_average(df, window=3):
     """
-    Add a moving average of the sentiment scores to smooth out noise.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing 'average_sentiment'.
-        window (int): Window size for moving average.
-
-    Returns:
-        pd.DataFrame: DataFrame with an added 'sentiment_moving_average' column.
+    add a moving average of the sentiment scores to smooth out noise.
+    
+    args:
+        df (pd.DataFrame): dataframe containing 'average_sentiment'
+        window (int): window size for moving average
+    
+    returns:
+        pd.DataFrame: dataframe with added 'sentiment_moving_average' column
     """
     logger.info(f"Adding a {window}-day moving average to sentiment scores...")
     df[f'sentiment_moving_average_{window}d'] = df['average_sentiment'].rolling(window=window).mean()
@@ -117,13 +121,13 @@ def add_moving_average(df, window=3):
 
 def add_interaction_features(df):
     """
-    Add interaction features between sentiment and mention counts.
- 
-    Args:
-    df (pd.DataFrame): DataFrame containing 'average_sentiment' and 'mention_count'.
-
-    Returns:
-    pd.DataFrame: DataFrame with added interaction features.
+    add interaction features between sentiment and mention counts.
+    
+    args:
+        df (pd.DataFrame): dataframe containing 'average_sentiment' and 'mention_count'
+    
+    returns:
+        pd.DataFrame: dataframe with added interaction features
     """
     logger.info("Adding interaction features...")
     df['sentiment_mentions_interaction'] = df['average_sentiment'] * df['mention_count']
@@ -132,10 +136,10 @@ def add_interaction_features(df):
 
 def process_ticker(ticker):
     """
-    Process sentiment data for a single ticker.
-
-    Args:
-        ticker (str): Stock ticker symbol.
+    process sentiment data for a single ticker.
+    
+    args:
+        ticker (str): stock ticker symbol
     """
     logger.info(f"Processing sentiment data for {ticker}...")
     input_file = os.path.join(INPUT_DIR, f"{ticker}_mentions.csv")
@@ -145,27 +149,25 @@ def process_ticker(ticker):
         return
 
     try:
-        # Load Reddit mentions CSV
+        # load reddit mentions csv
         df = pd.read_csv(input_file)
         logger.info(f"Loaded {input_file} with shape {df.shape}")
         
-        # Ensure 'body' and 'created_date' columns exist
+        # ensure required columns exist
         if not {'body', 'created_date'}.issubset(df.columns):
             logger.error(f"Required columns missing in {input_file}. Skipping...")
             return
 
-        # Analyze sentiment
+        # analyze sentiment and process dates
         df = analyze_sentiment(df)
-
-        # Process dates
         df['created_date'] = pd.to_datetime(df['created_date'], errors='coerce')
         df = df.dropna(subset=['created_date'])
-        df['Date'] = df['created_date'].dt.date  # Extract date part
+        df['Date'] = df['created_date'].dt.date
         
-        # Aggregate daily sentiment and mention counts
+        # aggregate daily sentiment
         daily_sentiment = aggregate_daily_sentiment(df)
         
-        # Load corresponding trading days from processed price data
+        # load trading days from price data
         price_data_path = f"data/processed/technical_indicators/{ticker}_technical_indicators.csv"
         if not os.path.isfile(price_data_path):
             logger.error(f"Price data file {price_data_path} does not exist. Skipping weekend handling for {ticker}.")
@@ -174,30 +176,20 @@ def process_ticker(ticker):
             price_df = pd.read_csv(price_data_path, parse_dates=['Date'])
             trading_days = pd.to_datetime(price_df['Date']).sort_values().unique()
         
-        # Handle weekends by aligning with trading days
+        # process and enhance sentiment data
         daily_sentiment_aligned = handle_weekends(daily_sentiment, trading_days)
-        
-        # Normalize all numerical features
         numerical_features = ['average_sentiment', 'mention_count', 'total_score']
-        daily_sentiment_aligned = normalize_sentiment(
-            daily_sentiment_aligned,
-            numerical_features
-        )
-        
-        # Add moving average to smooth noise
+        daily_sentiment_aligned = normalize_sentiment(daily_sentiment_aligned, numerical_features)
         daily_sentiment_aligned = add_moving_average(daily_sentiment_aligned, window=3)
-        # Add interaction features
         daily_sentiment_aligned = add_interaction_features(daily_sentiment_aligned)
-        # Add volume metrics (number of mentions per day is already captured as 'mention_count')
-        # If desired, additional volume metrics can be added here
         
-        # Deal with missing sentiment scores by filling forward
+        # handle missing values
         daily_sentiment_aligned['average_sentiment'].fillna(method='ffill', inplace=True)
         daily_sentiment_aligned['mention_count'].fillna(0, inplace=True)
         daily_sentiment_aligned['total_score'].fillna(0, inplace=True)
         daily_sentiment_aligned.fillna(0, inplace=True)
         
-        # Save processed sentiment data
+        # save processed data
         output_file = os.path.join(OUTPUT_DIR, f"{ticker}_daily_sentiment.csv")
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         daily_sentiment_aligned.to_csv(output_file, index=False)
@@ -208,15 +200,19 @@ def process_ticker(ticker):
         raise e
 
 def process_multiple_tickers(tickers):
+    """
+    process sentiment data for multiple tickers.
+    
+    args:
+        tickers (list): list of stock ticker symbols
+    """
     for ticker in tickers:
         process_ticker(ticker)
 
 def main():
-    # Parse command-line arguments
-  #  parser = argparse.ArgumentParser(description='Process Reddit sentiment data for stock tickers.')
-  #  parser.add_argument('--tickers', nargs='+', required=True, help='List of stock tickers to process (e.g., AAPL MSFT)')
-  #   args = parser.parse_args()
-    
+    """
+    main function to process sentiment data for predefined tickers.
+    """
     tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]
     
     for ticker in tickers:

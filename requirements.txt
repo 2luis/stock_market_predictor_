@@ -9,5 +9,8 @@ python-dotenv
 praw
 seaborn
 zstandard
-
-
+orjson
+nltk
+ipython
+xgboost
+imblearn
